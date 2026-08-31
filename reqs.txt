@@ -1,0 +1,7 @@
+pandas
+numpy
+flask
+openpyxl
+yfinance
+scipy
+xlwings

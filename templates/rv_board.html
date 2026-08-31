@@ -1,0 +1,756 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VIX RV Signal Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Source+Sans+3:wght@400;600&display=swap">
+<style>
+:root{
+  --paper:#0E1417; --surface:#161E22; --surface2:#1D272C; --raised:#222E34;
+  --ink:#E7EEF0; --ink2:#B8C6CC; --muted:#8494A0; --hair:#26333A; --hair2:#33434B;
+  --c1:#0F9DBF; --c2:#D6702E; --c3:#8878DC; --c4:#AA8A2C;
+  --good:#2BA37A; --warn:#C98A2E; --bad:#D2564B; --info:#4A8FD4; --flat:#7C8B95;
+  --fm:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --fb:"Source Sans 3","Helvetica Neue",Arial,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--fb);font-size:14px;line-height:1.5}
+.mono,.num{font-family:var(--fm);font-variant-numeric:tabular-nums}
+.wrap{max-width:1560px;margin:0 auto;padding:0 18px}
+a{color:var(--c1)}
+button{font-family:var(--fm);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;
+  background:var(--surface2);color:var(--ink2);border:1px solid var(--hair2);border-radius:3px;
+  padding:6px 11px;cursor:pointer}
+button:hover{background:var(--raised);color:var(--ink)}
+button.on{background:var(--c1);border-color:var(--c1);color:#04161c;font-weight:600}
+button:focus-visible{outline:2px solid var(--c1);outline-offset:2px}
+
+header{position:sticky;top:0;z-index:40;background:rgba(14,20,23,.93);backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--hair)}
+header .wrap{display:flex;align-items:center;gap:18px;height:52px;flex-wrap:wrap}
+.brand{font-family:var(--fm);font-size:.78rem;font-weight:600;letter-spacing:.14em;text-transform:uppercase}
+.stamp{font-family:var(--fm);font-size:.7rem;color:var(--muted)}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--good);margin-right:6px}
+.dot.stale{background:var(--warn)}
+.dot.err{background:var(--bad)}
+.spacer{flex:1}
+
+section{padding:15px 0}
+section:first-of-type{padding-top:18px}
+h2{font-family:var(--fm);font-size:.655rem;font-weight:600;letter-spacing:.17em;
+  text-transform:uppercase;color:var(--muted);margin:0 0 12px;
+  display:flex;align-items:center;gap:14px;min-width:0}
+h2 .rule{flex:1 1 auto;height:1px;background:var(--hair);min-width:16px}
+h2 .meta{flex:0 0 auto;display:flex;align-items:center;gap:14px;
+  font-family:var(--fb);font-size:.72rem;font-weight:400;letter-spacing:0;
+  text-transform:none;color:var(--muted)}
+h2 .meta b{font-family:var(--fm);font-weight:500}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:1px;background:var(--hair);
+  border:1px solid var(--hair);border-radius:3px;overflow:hidden}
+.tiles>div{background:var(--surface);padding:9px 12px;display:flex;flex-direction:column;gap:1px}
+.tiles .k{font-family:var(--fm);font-size:.62rem;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.tiles .v{font-family:var(--fm);font-size:1.16rem;font-weight:500;font-variant-numeric:tabular-nums;line-height:1.15}
+.tiles .n{font-size:.72rem;color:var(--muted);line-height:1.3}
+
+/* exact halves. The two SVGs also share one viewBox aspect ratio, because
+   with width:100%;height:auto the drawn height is column width x H/W --
+   equal columns alone would still leave them different heights. */
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;
+  align-items:stretch}
+@media (max-width:1080px){.grid{grid-template-columns:1fr}}
+.fitgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(392px,1fr));gap:12px}
+.card h4{margin:0;font-size:.82rem;font-weight:600;display:flex;align-items:baseline;
+  justify-content:space-between;gap:10px}
+.card h4 .cap{font-family:var(--fm);font-size:.6rem;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--muted);font-weight:400;text-align:right}
+.card.tight{padding:10px 12px 8px}
+/* the two plots the desk actually reads carry a hairline accent at the top
+   edge rather than a glow, which reads as deliberate rather than decorative */
+.card.lead{border-top:2px solid var(--c1)}
+.card.lead h4{font-size:.87rem}
+/* the seasonal adjustment is reference material, not a signal */
+.card.quiet{background:transparent}
+.card.quiet h4{font-weight:500;color:var(--muted)}
+.card.tight svg{margin-top:2px}
+/* the drawing key, inline in the section header */
+h2 .meta i{flex:none;display:inline-block}
+h2 .meta i.solid{width:15px;height:2px;background:var(--c1);border-radius:2px}
+h2 .meta i.dash{width:15px;height:0;border-top:2px dashed var(--muted)}
+h2 .meta i.band{width:15px;height:11px;background:rgba(15,157,191,.18);
+  border-top:1px dashed rgba(15,157,191,.6);border-bottom:1px dashed rgba(15,157,191,.6)}
+h2 .meta i.hollow{width:8px;height:8px;border-radius:50%;border:2px solid var(--muted);
+  background:var(--paper)}
+h2 .meta i.filled{width:9px;height:9px;border-radius:50%;background:var(--c1);
+  box-shadow:0 0 0 2px var(--paper),0 0 0 3px rgba(15,157,191,.4)}
+h2 .meta .units{font-family:var(--fm);font-size:.66rem;letter-spacing:.06em;
+  color:var(--muted);border-left:1px solid var(--hair);padding-left:14px}
+details.method{border:1px solid var(--hair);border-radius:3px;background:var(--surface)}
+details.method>summary{cursor:pointer;padding:11px 14px;font-family:var(--fm);font-size:.655rem;
+  letter-spacing:.17em;text-transform:uppercase;color:var(--muted);list-style:none}
+details.method>summary::-webkit-details-marker{display:none}
+details.method>summary::before{content:'+ ';color:var(--c1)}
+details.method[open]>summary::before{content:'\2212 '}
+details.method>summary:hover{color:var(--ink)}
+details.method .body{padding:0 14px 14px;display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:18px}
+details.method h5{margin:0 0 5px;font-size:.8rem;font-weight:600;color:var(--ink)}
+details.method p{margin:0 0 8px;font-size:.79rem;color:var(--ink2);line-height:1.55}
+details.method code{font-family:var(--fm);font-size:.75rem;background:var(--surface2);
+  padding:1px 4px;border-radius:2px}
+.card{background:var(--surface);border:1px solid var(--hair);border-radius:3px;padding:14px}
+.card h3{margin:0 0 4px;font-size:.95rem;font-weight:600}
+.card p.sub{margin:0 0 10px;font-size:.79rem;color:var(--muted)}
+svg{display:block;width:100%;height:auto;overflow:visible}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px}
+.legend span{display:inline-flex;align-items:center;gap:6px;font-size:.75rem;color:var(--ink2)}
+.sw{width:13px;height:3px;border-radius:2px}
+
+/* The wrapper is the scroll container in BOTH axes, so the header sticks to
+   it (top:0) rather than to the viewport. Sticking to the viewport from
+   inside an overflow container is what made the header detach. */
+.tblwrap{overflow:auto;max-height:min(74vh,780px);border:1px solid var(--hair);
+  border-radius:3px;background:var(--surface);position:relative}
+table{border-collapse:separate;border-spacing:0;width:100%;font-size:.79rem;min-width:1680px}
+th,td{padding:6px 11px;text-align:right;white-space:nowrap;
+  border-bottom:1px solid var(--hair);background:var(--surface)}
+tbody tr:last-child td{border-bottom:0}
+/* sticky name column, with a hairline so it reads as pinned when scrolled */
+th:first-child,td:first-child{text-align:left;position:sticky;left:0;z-index:2;
+  box-shadow:1px 0 0 var(--hair)}
+thead th{position:sticky;top:0;z-index:3;background:var(--surface2);
+  border-bottom:1px solid var(--hair2);font-family:var(--fm);font-size:.62rem;font-weight:500;
+  letter-spacing:.055em;text-transform:uppercase;color:var(--muted);cursor:pointer;
+  vertical-align:bottom}
+thead th:first-child{z-index:4;background:var(--surface2)}
+thead th:hover{color:var(--ink2)}
+thead th.sorted{color:var(--ink)}
+tbody td{font-family:var(--fm)}
+tbody td.name{font-family:var(--fm);font-weight:500}
+tbody tr:hover td{background:var(--surface2)}
+/* dim by colour, never by opacity: opacity on a cell makes a stacking context
+   and the sticky first column then renders on the wrong layer */
+tbody tr.dim td{color:var(--muted)}
+tbody tr.dim td .pill{opacity:.75}
+.pill{display:inline-block;font-family:var(--fm);font-size:.62rem;font-weight:600;letter-spacing:.07em;
+  padding:2px 7px;border-radius:3px;border:1px solid currentColor}
+.p-trade{color:var(--good)} .p-half{color:var(--warn)} .p-veto{color:var(--bad)}
+.p-watch{color:var(--info)} .p-flat,.p-none{color:var(--flat)} .p-dup{color:var(--c3)}
+.side-SELL{color:var(--c2);font-weight:600}
+.side-BUY{color:var(--c1);font-weight:600}
+.pos{color:var(--good)} .neg{color:var(--bad)} .zero{color:var(--flat)}
+.fam{font-size:.7rem;color:var(--muted)}
+.why{font-family:var(--fb);font-size:.74rem;color:var(--muted);text-align:left;
+  min-width:250px;max-width:330px;white-space:normal;line-height:1.4}
+.grpcell{font-family:var(--fm);font-size:.66rem;color:var(--c3);text-align:center}
+.numsep{border-left:1px solid var(--hair2)}
+.empty{padding:26px;text-align:center;color:var(--muted);font-size:.85rem}
+footer{padding:26px 0 46px;color:var(--muted);font-size:.78rem;border-top:1px solid var(--hair);margin-top:24px}
+.err{background:#2a1618;border:1px solid var(--bad);color:#f0c8c4;padding:10px 13px;border-radius:4px;
+  font-family:var(--fm);font-size:.78rem;margin:14px 0}
+</style>
+</head>
+<body>
+
+<header><div class="wrap">
+  <span class="brand">VIX RV Board</span>
+  <span class="stamp" id="statusLine"><span class="dot"></span>loading…</span>
+  <span class="spacer"></span>
+  <button id="btnLast" class="on">Last</button>
+  <button id="btnSettle">Settle</button>
+  <button id="btnRefresh">Refresh</button>
+  <button id="btnRebuild">Rebuild history</button>
+</div></header>
+
+<div class="wrap">
+  <div id="err"></div>
+
+  <section>
+    <h2>Regime<span class="rule"></span><span class="meta" id="regimeMeta"></span></h2>
+    <div class="tiles" id="regime"></div>
+  </section>
+
+  <section>
+    <h2>Outrights and calendars<span class="rule"></span>
+      <span class="meta">
+        <span><i class="solid"></i>trading</span>
+        <span><i class="dash"></i>fitted</span>
+        <span><i class="band"></i>trigger band</span>
+        <span><i class="hollow"></i>no signal</span>
+        <span><i class="filled"></i>fired</span>
+        <span class="units">ticks / z</span>
+      </span>
+    </h2>
+    <div class="grid">
+      <div class="card tight lead">
+        <h4>Contracts <span class="cap">live vs seasonally adjusted fit</span></h4>
+        <div id="curveChart"></div>
+      </div>
+      <div class="card tight lead" id="calCard">
+        <h4><span>1:1 calendar</span></h4>
+        <div id="calFit"></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Flies and ratios<span class="rule"></span></h2>
+    <div class="fitgrid" id="fitGrid"></div>
+  </section>
+
+  <section>
+    <h2>Signal board<span class="rule"></span><span class="meta" id="sigCount"></span></h2>
+    <div class="tblwrap" id="sigWrap"></div>
+  </section>
+
+  <section>
+    <h2>Carry book<span class="rule"></span>
+      <span class="meta">held and rolled &mdash; no signals taken here</span>
+    </h2>
+    <div class="tblwrap" id="carryWrap"></div>
+  </section>
+
+  <section>
+    <h2>Seasonal reference<span class="rule"></span></h2>
+    <div class="card tight quiet">
+      <h4><span>Contract-month offsets</span>
+        <span class="cap">reference &middot; removed from prices before every fit &middot; ticks</span></h4>
+      <div id="seasChart"></div>
+    </div>
+  </section>
+
+  <section>
+    <details class="method">
+      <summary>How this board is built</summary>
+      <div class="body">
+        <div>
+          <h5>The fit</h5>
+          <p>Each session a smooth curve <code>a + b&middot;&radic;dte + c&middot;dte</code> is fitted through the
+          live generics plus spot VIX pinned at zero days at double weight. The spot anchor is load-bearing:
+          without it the fit drifts at the front, where the interesting dislocations live, and hit rate falls
+          about 14 points.</p>
+          <p>A structure's <strong>deviation</strong> is the weighted sum of its legs' residuals &mdash; which is
+          what a fly or a ratio measures by construction.</p>
+        </div>
+        <div>
+          <h5>Why the seasonal offsets</h5>
+          <p>Every contract month carries a persistent level against any smooth curve, because the calendar
+          period it covers holds a persistent amount of realised volatility. December has printed below a plain
+          fit in <strong>98% of sessions and in every year since 2013</strong>; October is the mirror image.</p>
+          <p>Left uncorrected that is a permanent false signal, and the offending contract also drags the fitted
+          curve toward itself, making its neighbours look mispriced. So the offsets are estimated causally &mdash;
+          median of prior residuals for that month &mdash; and removed from the prices <em>before</em> the fit.</p>
+        </div>
+        <div>
+          <h5>Reading the panels</h5>
+          <p>Solid is where a structure actually trades, dashed is what the fitted curve implies. Because the
+          fitted level carries each offset back, <code>actual &minus; fitted</code> is the adjusted deviation
+          exactly &mdash; the vertical gap <em>is</em> the signal.</p>
+          <p>Only consecutive-leg ladders appear. Wide calendars and skip-flies share a family with different
+          leg spacings, so plotting them on one axis would imply a sequence that does not exist; they sit in the
+          carry book.</p>
+        </div>
+        <div>
+          <h5>Trigger and bracket</h5>
+          <p>A single rolling-252 z-score of the adjusted deviation at <code>|z| &ge; 1.5</code>, traded against
+          it. The month z-score is shown for transparency and gates nothing &mdash; once seasonality is removed at
+          contract level, confirming against a month baseline corrects for it twice.</p>
+          <p>Target 2&sigma;, stop 1&sigma; of the structure's own trailing daily move, 15-session time stop.
+          Fixed tick targets underperform because &sigma; runs from 10 to 92 ticks across the curve.</p>
+        </div>
+        <div>
+          <h5>Costs and units</h5>
+          <p>One tick is 0.01 index points of the weighted sum &mdash; <strong>$10 on one structure unit</strong>
+          at the VX $1,000 multiplier. Same 100&times; convention as the existing engine.</p>
+          <p>Commission is $2.50 per contract per round trip: <strong>$5 / $10 / $15 / $25</strong> for a
+          spread / fly / 1:2 / 2:3. Calibrated expectancies add one further tick of slippage.</p>
+        </div>
+        <div>
+          <h5>Limits worth remembering</h5>
+          <p>Barriers are checked on settlements, so an overnight gap can carry an exit past the stop.
+          Expectancies come from one 13.6-year sample with thresholds chosen by search &mdash; the variance-ratio
+          evidence underneath is parameter-free, the per-trade numbers are optimistically biased.</p>
+          <p>2013&ndash;2017 was materially weaker than 2018 onward. Judge structures on incremental edge over an
+          always-sell baseline, never on raw annual ticks.</p>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <footer>
+    <span id="footStats"></span>
+  </footer>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const NS = 'http://www.w3.org/2000/svg';
+let SORT = {key:null, dir:-1};
+let LAST = null;
+
+/* Chart heights, in viewBox units. Every SVG is width:100%;height:auto, so the
+   drawn height is (column width) x H/W -- raising H here gives the plot more
+   vertical room at any window size. H_MAIN is shared by the contracts plot and
+   the 1:1 calendar beside it, which is what keeps those two the same height. */
+const H_MAIN = 260;   // contracts + 1:1 calendar   (660 wide)
+const H_FIT  = 258;   // fly / ratio ladders        (520 wide)
+const H_SEAS = 190;   // seasonal month offsets     (980 wide)
+
+/* Rungs drawn on any contract-laddered plot, front to back: the contracts
+   curve, the 1:1 calendar, and the fly / ratio ladders. Rendering only --
+   the fits and the signal table behind them still see the whole board. */
+const CURVE_MAX_CONTRACTS = 6;
+
+function el(n,a){const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);return e;}
+function tx(x,y,s,anchor,size,fill){
+  const t=el('text',{x,y,'text-anchor':anchor||'middle','font-size':size||10.5,
+    'font-family':'IBM Plex Mono, monospace','font-variant-numeric':'tabular-nums',
+    fill:fill||'var(--muted)'});t.textContent=s;return t;}
+const f1 = v => v===null||v===undefined ? '–' : (+v).toFixed(1);
+const f2 = v => v===null||v===undefined ? '–' : (+v).toFixed(2);
+const f0 = v => v===null||v===undefined ? '–' : Math.round(v).toLocaleString();
+const sgn = v => v===null||v===undefined ? '' : (v>0?'pos':(v<0?'neg':'zero'));
+// Ticks are a count, so they print whole. Everything non-tick (z, hit %,
+// sessions, signals a year) keeps its decimals via f1 / f2.
+const plus = v => v===null||v===undefined ? '–' : (v>0?'+':'')+Math.round(v);
+const tk   = v => v===null||v===undefined ? '–' : String(Math.round(v));
+
+/* ---------------------------------------------------------------- regime */
+function drawRegime(r){
+  if(!r) return;
+  const t = [
+    ['Spot VIX', r.spot_vix===null?'–':(+r.spot_vix).toFixed(2), r.spot_source||''],
+    ['1y pctile', r.vix_pct_1y===null?'–':r.vix_pct_1y+'%', 'of the last 252 sessions'],
+    ['Basis G1−spot', plus(r.basis_ticks)+'t', 'daily roll '+plus(r.daily_roll_ticks)+'t'],
+    ['VIX / VIX3M', r.ivts===null?'–':(+r.ivts).toFixed(3), r.ivts===null?'':(r.ivts<1?'contango':'INVERTED')],
+    ['Front fly', plus(r.front_fly_ticks)+'t',
+       r.front_fly_ticks===null||r.front_fly_ticks===undefined ? 'no front fly'
+         : (r.front_fly_ticks>0?'front steeper — healthy':'front flat or inverted')],
+    ['VVIX', r.indices&&r.indices.VVIX?(+r.indices.VVIX.value).toFixed(1):'–', 'vol of vol'],
+    ['VIX9D', r.indices&&r.indices.VIX9D?(+r.indices.VIX9D.value).toFixed(2):'–', r.indices&&r.indices.VIX9D?r.indices.VIX9D.as_of:''],
+    ['VIX6M', r.indices&&r.indices.VIX6M?(+r.indices.VIX6M.value).toFixed(2):'–', r.indices&&r.indices.VIX6M?r.indices.VIX6M.as_of:'']
+  ];
+  $('#regime').innerHTML = t.map(x=>
+    `<div><span class="k">${x[0]}</span><span class="v">${x[1]}</span><span class="n">${x[2]}</span></div>`
+  ).join('');
+  const rm=$('#regimeMeta');
+  if(rm) rm.innerHTML = r.expectancy_band ? `<span>${r.expectancy_band}</span>` : '';
+}
+
+/* ----------------------------------------------------------------- curve */
+function drawCurve(c, spot){
+  const box=$('#curveChart'); box.innerHTML='';
+  if(!c||!c.length) return;
+  // Only the front of the board is drawn. The back months add width without
+  // adding information -- they sit on the fit -- and they stretch the dte axis
+  // far enough that the front dislocations, which is what this plot is for,
+  // compress into the first inch. The fit itself still uses every contract.
+  c = c.slice(0, CURVE_MAX_CONTRACTS);
+  if(!c.length) return;
+  const W=660,H=H_MAIN,ml=40,mr=16,mt=12,mb=36;
+  const vals=c.map(p=>p.price).concat(c.map(p=>p.fitted).filter(v=>v!==null));
+  if(spot!==null&&spot!==undefined) vals.push(spot);
+  const lo=Math.floor(Math.min(...vals)-0.6), hi=Math.ceil(Math.max(...vals)+0.6);
+  const n=c.length;
+  // x is days to expiry, with spot at zero -- the same axis the curve is
+  // fitted on. Spacing the contracts by slot index instead draws G1 a full
+  // slot from spot whether it expires in three days or thirty, which bends
+  // the picture at the front, where the dislocations worth seeing are.
+  const dtes=c.map(p=>p.dte);
+  const byDte=dtes.every(d=>d!==null&&d!==undefined&&isFinite(d))&&Math.max(...dtes)>0;
+  const dmax=byDte?Math.max(...dtes):0;
+  const X=i=>byDte ? ml+(c[i].dte/dmax)*(W-ml-mr) : ml+(i+1)*(W-ml-mr)/n;
+  const X0=ml;
+  const Y=v=>mt+(hi-v)*(H-mt-mb)/(hi-lo);
+  const s=el('svg',{viewBox:`0 0 ${W} ${H}`,role:'img','aria-label':'live VX curve against the fitted curve'});
+  const gstep=(hi-lo)>9?2:1;
+  for(let g=Math.ceil(lo/gstep)*gstep;g<=hi;g+=gstep){
+    s.appendChild(el('line',{x1:ml,x2:W-mr,y1:Y(g),y2:Y(g),stroke:'var(--hair)','stroke-width':1}));
+    s.appendChild(tx(ml-6,Y(g)+3.5,g,'end',9.5));
+  }
+  let dl='', df='';
+  if(spot!==null&&spot!==undefined){dl=`M${X0} ${Y(spot)}`; df=`M${X0} ${Y(spot)}`;}
+  c.forEach((p,i)=>{dl+=(dl?' L':'M')+X(i)+' '+Y(p.price);});
+  c.forEach((p,i)=>{if(p.fitted!==null) df+=(df?' L':'M')+X(i)+' '+Y(p.fitted);});
+  s.appendChild(el('path',{d:df,fill:'none',stroke:'var(--muted)','stroke-width':1.6,'stroke-dasharray':'5 4'}));
+  s.appendChild(el('path',{d:dl,fill:'none',stroke:'var(--c1)','stroke-width':2,'stroke-linejoin':'round'}));
+  if(spot!==null&&spot!==undefined){
+    s.appendChild(el('circle',{cx:X0,cy:Y(spot),r:4,fill:'var(--c2)',stroke:'var(--surface)','stroke-width':2}));
+    s.appendChild(tx(X0+3,Y(spot)-9,(+spot).toFixed(2),'start',9.5,'var(--c2)'));
+    s.appendChild(tx(X0,H-mb+13,'spot','middle',9,'var(--c2)'));
+  }
+  c.forEach((p,i)=>{
+    s.appendChild(el('circle',{cx:X(i),cy:Y(p.price),r:3,fill:'var(--c1)',stroke:'var(--surface)','stroke-width':1.5}));
+    const lft=(i===0?X0:X(i-1)), rgt=(i===n-1?X(i)+(X(i)-lft):X(i+1));
+    const g=el('g'); g.appendChild(el('rect',{x:(lft+X(i))/2,y:mt,
+      width:Math.max((rgt-lft)/2,6),height:H-mt-mb,fill:'transparent'}));
+    g.appendChild(el('title',{}));
+    g.lastChild.textContent='G'+p.generic+'  '+p.label+'   '+(p.ticker||'')+'\n\ntrading at   '+p.price+'\nfitted at    '+(p.fitted===null?'-':(+p.fitted).toFixed(3))+'\nresidual     '+plus(p.residual_ticks)+' ticks, seasonally adjusted'+'\nraw residual '+plus(p.residual_raw_ticks)+'\nmonth offset '+plus(p.offset_ticks)+' removed before fitting'+'\n\n'+p.dte+' trading days to expiry';
+    s.appendChild(g);
+    if(i%2===0||i===n-1){
+      s.appendChild(tx(X(i),H-mb+13,'G'+p.generic,'middle',9));
+      s.appendChild(tx(X(i),H-mb+24,p.label,'middle',8.5));
+    }
+  });
+  box.appendChild(s);
+}
+
+const CAL_FAM='1:1 calendar';
+const FAM_ORDER=['fly 1:2:1','ratio 1:2','ratio 2:3'];
+
+
+function drawStructureFits(fits){
+  const cal=$('#calFit'), box=$('#fitGrid');
+  cal.innerHTML=''; box.innerHTML='';
+  if(!fits){box.innerHTML='<div class="empty">Waiting for the fitted curve.</div>';return;}
+
+  // the calendar ladder sits beside the contract curve, ahead of the flies
+  if(fits[CAL_FAM]&&fits[CAL_FAM].length>1) drawOneFit(cal,fits[CAL_FAM],CAL_FAM,true);
+
+  FAM_ORDER.filter(f=>fits[f]&&fits[f].length>1).forEach(fam=>{
+    const card=document.createElement('div'); card.className='card tight';
+    const h=document.createElement('h4');
+    h.innerHTML='<span>'+fam+'</span>';
+    const holder=document.createElement('div');
+    card.appendChild(h); card.appendChild(holder);
+    box.appendChild(card);
+    drawOneFit(holder,rows_of(fits,fam),fam,false);
+  });
+}
+function rows_of(fits,fam){return fits[fam];}
+
+function drawOneFit(holder,rows,fam,lead){
+  // lead == the 1:1 calendar beside the contracts plot: same viewBox as
+  // drawCurve (660x208) so the two render at identical height
+  // Front of the ladder only, on the same cap as the contracts plot -- these
+  // are indexed by front month, so the two axes stay in step.
+  rows = rows.slice(0, CURVE_MAX_CONTRACTS);
+  if(!rows.length) return;
+  const W=lead?660:520,H=lead?H_MAIN:H_FIT,ml=48,mr=18,mt=14,mb=38;
+  const vals=[];
+  rows.forEach(r=>{
+    vals.push(r.actual); vals.push(r.fitted);
+    const c=(r.band_mid===null||r.band_mid===undefined)?0:r.band_mid;
+    const h=(r.band_half===null||r.band_half===undefined)?0:r.band_half;
+    vals.push(r.fitted+c+h); vals.push(r.fitted+c-h);
+  });
+  let lo=Math.min(...vals), hi=Math.max(...vals);
+  const pad=Math.max((hi-lo)*0.16,8);
+  lo-=pad; hi+=pad;
+  if(lo>0)lo=0; if(hi<0)hi=0;
+  const n=rows.length;
+  const X=i=>ml+(n===1?0.5:i/(n-1))*(W-ml-mr);
+  const Y=v=>mt+(hi-v)*(H-mt-mb)/(hi-lo);
+  const s=el('svg',{viewBox:'0 0 '+W+' '+H,role:'img','aria-label':fam+' structures, actual against fitted'});
+
+  const step=niceStep((hi-lo)/4);
+  for(let g=Math.ceil(lo/step)*step; g<=hi; g+=step){
+    const zeroish=Math.abs(g)<1e-9;
+    s.appendChild(el('line',{x1:ml,x2:W-mr,y1:Y(g),y2:Y(g),
+      stroke:zeroish?'var(--hair2)':'var(--hair)','stroke-width':zeroish?1.4:1}));
+    s.appendChild(tx(ml-8,Y(g)+3.5,Math.round(g),'end',9.5));
+  }
+
+  // The +/-1.5 sigma trigger band, drawn from the SAME mean and sigma the
+  // z-score uses -- so a point outside the band has fired, by construction.
+  // (An earlier version used the daily P&L sigma and the two disagreed.)
+  const mid=r=>(r.band_mid===null||r.band_mid===undefined)?0:r.band_mid;
+  const half=r=>(r.band_half===null||r.band_half===undefined)?0:r.band_half;
+  let band='', hi_=[], lo_=[];
+  rows.forEach((r,i)=>{
+    const c=r.fitted+mid(r);
+    band+=(i?' L':'M')+X(i)+' '+Y(c+half(r));
+    hi_.push((i?' L':'M')+X(i)+' '+Y(c+half(r)));
+    lo_.push((i?' L':'M')+X(i)+' '+Y(c-half(r)));
+  });
+  for(let i=rows.length-1;i>=0;i--){const r=rows[i];
+    band+=' L'+X(i)+' '+Y(r.fitted+mid(r)-half(r));}
+  band+=' Z';
+  const hasTrigger=!!(rows[0]&&rows[0].signal_traded);
+  if(hasTrigger){
+    s.appendChild(el('path',{d:band,fill:'var(--c1)',opacity:.16,stroke:'none'}));
+    s.appendChild(el('path',{d:hi_.join(''),fill:'none',stroke:'var(--c1)',
+      'stroke-width':1,'stroke-dasharray':'3 3',opacity:.5}));
+    s.appendChild(el('path',{d:lo_.join(''),fill:'none',stroke:'var(--c1)',
+      'stroke-width':1,'stroke-dasharray':'3 3',opacity:.5}));
+  }
+
+  let dF='',dA='';
+  rows.forEach((r,i)=>{dF+=(i?' L':'M')+X(i)+' '+Y(r.fitted);});
+  rows.forEach((r,i)=>{dA+=(i?' L':'M')+X(i)+' '+Y(r.actual);});
+  s.appendChild(el('path',{d:dF,fill:'none',stroke:'var(--muted)','stroke-width':1.6,'stroke-dasharray':'5 4'}));
+  s.appendChild(el('path',{d:dA,fill:'none',stroke:'var(--c1)','stroke-width':2,'stroke-linejoin':'round'}));
+
+  rows.forEach((r,i)=>{
+    const fired=hasTrigger&&['TRADE','DUPLICATE','HALF SIZE'].includes(r.verdict);
+    const rich=r.deviation>=0;
+    const col=rich?'var(--c2)':'var(--c1)';
+    // the deviation itself, drawn as the gap
+    s.appendChild(el('line',{x1:X(i),x2:X(i),y1:Y(r.fitted),y2:Y(r.actual),
+      stroke:fired?col:'var(--muted)','stroke-width':fired?2.6:1,
+      opacity:fired?1:.4}));
+    if(fired){
+      // halo, then a solid disc: unmistakable against the hollow markers
+      s.appendChild(el('circle',{cx:X(i),cy:Y(r.actual),r:8.5,fill:col,opacity:.22}));
+      s.appendChild(el('circle',{cx:X(i),cy:Y(r.actual),r:5,fill:col,
+        stroke:'var(--surface)','stroke-width':1.6}));
+      s.appendChild(tx(X(i),Y(r.actual)+(rich?-13:17),plus(r.deviation),'middle',10,col));
+    } else {
+      s.appendChild(el('circle',{cx:X(i),cy:Y(r.actual),r:2.8,
+        fill:'var(--surface)',stroke:'var(--muted)','stroke-width':1.8}));
+    }
+    s.appendChild(tx(X(i),H-mb+14,r.front_month||r.legs_label,'middle',9,fired?'var(--ink2)':'var(--muted)'));
+    if(r.z!==null&&r.z!==undefined)
+      s.appendChild(tx(X(i),H-mb+25,(+r.z).toFixed(1),'middle',8.5,
+        Math.abs(r.z)>=1.5?col:'var(--muted)'));
+    const g=el('g');
+    const bandW=(W-ml-mr)/Math.max(n-1,1);
+    g.appendChild(el('rect',{x:X(i)-bandW/2,y:mt,width:bandW,height:H-mt-mb,
+      fill:'transparent'}));
+    const L=[(r.display||r.structure)+'   ('+r.structure+')', r.months, ''];
+    L.push('trading at   '+Math.round(r.actual)+' ticks');
+    L.push('fitted at    '+Math.round(r.fitted));
+    L.push('deviation    '+plus(r.deviation)+'   z '+(r.z===null?'-':(+r.z).toFixed(2)));
+    if(hasTrigger){
+      if(half(r)) L.push('fires outside '+plus(mid(r)-half(r))+' to '+plus(mid(r)+half(r)));
+      L.push('');
+      if(fired&&r.target!==null&&r.target!==undefined)
+        L.push((r.side||'')+'   take profit '+Math.round(r.target)+' ticks'
+               +(r.stop===null||r.stop===undefined?'':', stop '+Math.round(r.stop)));
+      if(r.exp_ticks!==null&&r.exp_ticks!==undefined)
+        L.push('expectancy   '+plus(r.exp_ticks)+' ticks per trade, after cost');
+      if(r.verdict) L.push(r.verdict);
+    } else {
+      L.push('');
+      L.push('carry book, not signal traded');
+    }
+    const ti=el('title',{});
+    ti.textContent=L.join('\n');
+    g.appendChild(ti);
+    s.appendChild(g);
+  });
+  holder.appendChild(s);
+}
+
+function niceStep(raw){
+  if(!(raw>0)) return 10;
+  const e=Math.pow(10,Math.floor(Math.log10(raw)));
+  const m=raw/e;
+  return (m<=1?1:m<=2?2:m<=5?5:10)*e;
+}
+
+const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function drawSeasonality(rows){
+  const box=$('#seasChart'); box.innerHTML='';
+  if(!rows||!rows.length) return;
+  const vals=rows.map(r=>r.offset_ticks).filter(v=>v!==null&&v!==undefined);
+  if(!vals.length) return;
+  const W=980,H=H_SEAS,ml=42,mr=14,mt=12,mb=30;
+  const lo=Math.min(-40,Math.floor(Math.min.apply(null,vals)/10)*10);
+  const hi=Math.max(20,Math.ceil(Math.max.apply(null,vals)/10)*10);
+  const bw=(W-ml-mr)/12;
+  const Y=v=>mt+(hi-v)*(H-mt-mb)/(hi-lo);
+  const s=el('svg',{viewBox:'0 0 '+W+' '+H,role:'img','aria-label':'contract-month offsets in ticks'});
+  for(let g=lo;g<=hi;g+=10){
+    s.appendChild(el('line',{x1:ml,x2:W-mr,y1:Y(g),y2:Y(g),
+      stroke:g===0?'var(--hair2)':'var(--hair)','stroke-width':g===0?1.4:1}));
+    s.appendChild(tx(ml-8,Y(g)+3.5,g>0?'+'+g:''+g,'end',10));
+  }
+  rows.forEach((r,i)=>{
+    const v=r.offset_ticks;
+    if(v===null||v===undefined) return;
+    const x=ml+i*bw+bw*0.22, w=bw*0.56, pos=v>=0;
+    // reference material: one quiet grey, no accent colour competing with the
+    // plots above. Only the extreme month is tinted enough to find by eye.
+    const big=Math.abs(v)>=20;
+    s.appendChild(el('rect',{x:x,y:pos?Y(v):Y(0),width:w,
+      height:Math.max(Math.abs(Y(v)-Y(0)),1.4),rx:2,
+      fill:big?'var(--muted)':'var(--hair2)'}));
+    s.appendChild(tx(x+w/2,pos?Y(v)-5:Y(v)+11,plus(v),'middle',8.5,
+      big?'var(--ink2)':'var(--muted)'));
+    s.appendChild(tx(x+w/2,H-mb+14,MONTHS[r.month-1],'middle',9,'var(--muted)'));
+    const g=el('g');
+    g.appendChild(el('rect',{x:ml+i*bw,y:mt,width:bw,height:H-mt-mb,fill:'transparent'}));
+    const ti=el('title',{});
+    ti.textContent=MONTHS[r.month-1]+' contracts\noffset removed '+plus(v)+' ticks\nraw median '+plus(r.raw_median)+'   mean '+plus(r.raw_mean)+'\n'+Math.round(r.pct_negative)+'% of observations negative\nn = '+r.n;
+    g.appendChild(ti);
+    s.appendChild(g);
+  });
+  s.appendChild(tx(ml,H-6,'median residual by contract month, hover for detail','start',8.5));
+  box.appendChild(s);
+}
+
+/* ----------------------------------------------------------------- table */
+const SIG_COLS = [
+  ['display','Structure','name'],
+  ['verdict','Verdict','pill'],
+  ['overlap_group','Grp','grp'],
+  ['side','Side','side'],
+  ['deviation_ticks','Dev adj','plus','sep'],
+  ['deviation_raw_ticks','Dev raw','plus'],
+  ['z_roll','z','f2'],
+  ['z_month','z mth','f2'],
+  ['target_ticks','Target','tk','sep'],
+  ['stop_ticks','Stop','tk'],
+  ['median_sessions','Days','f1'],
+  ['hit_rate','Hit %','f1','sep'],
+  ['exp_ticks','Exp/trade','plus'],
+  ['edge_ticks','Edge/yr','f0'],
+  ['per_year','Sig/yr','f1'],
+  ['gross_contracts','Lots','f0','sep'],
+  ['cost_usd','Cost','usd'],
+  ['carry_ticks_day','Carry/d','tk'],
+  ['family','Family','fam'],
+  ['why','Why','why','sep']
+];
+const CARRY_COLS = [
+  ['display','Structure','name'],
+  ['value_ticks','Value','tk','sep'],
+  ['deviation_ticks','Dev adj','plus'],
+  ['deviation_raw_ticks','Dev raw','plus'],
+  ['carry_ticks_day','Carry/d','tk'],
+  ['exp_ticks','Exp/trade','plus','sep'],
+  ['edge_ticks','Signal edge','f0'],
+  ['gross_contracts','Lots','f0','sep'],
+  ['cost_usd','Cost','usd'],
+  ['family','Family','fam'],
+  ['note','Note','why','sep']
+];
+
+function cell(row,key,kind,sep){
+  const v=row[key];
+  const cs=sep?' numsep':'';
+  if(kind==='pill'){
+    const cls={'TRADE':'p-trade','HALF SIZE':'p-half','VETO':'p-veto','WATCH':'p-watch',
+               'DUPLICATE':'p-dup','NO EDGE':'p-none','NOT TRADED':'p-none','FLAT':'p-flat'}[v]||'p-flat';
+    return `<td class="${cs}"><span class="pill ${cls}">${v}</span></td>`;
+  }
+  if(kind==='side') return `<td class="side-${v||''}${cs}">${v||'–'}</td>`;
+  // shown by front-contract month; the generic code stays on hover
+  if(kind==='name') return `<td class="name${cs}" title="${row.structure||''}">${v}</td>`;
+  if(kind==='fam') return `<td class="fam${cs}">${v}</td>`;
+  if(kind==='grp') return `<td class="grpcell${cs}">${v||''}</td>`;
+  if(kind==='why') return `<td class="why${cs}">${v||''}</td>`;
+  if(kind==='tk') return `<td class="${cs}">${tk(v)}</td>`;
+  if(kind==='usd') return `<td class="${cs}">${v===null||v===undefined?'–':'$'+f0(v)}</td>`;
+  if(kind==='plus') return `<td class="${sgn(v)}${cs}">${plus(v)}</td>`;
+  if(kind==='f2') return `<td class="${key.startsWith('z')?sgn(v):''}${cs}">${f2(v)}</td>`;
+  if(kind==='f0') return `<td class="${key==='edge_ticks'?sgn(v):''}${cs}">${f0(v)}</td>`;
+  return `<td class="${cs}">${f1(v)}</td>`;
+}
+
+function drawTable(target,rows,cols,dimIf){
+  const w=$(target);
+  if(!rows||!rows.length){w.innerHTML='<div class="empty">Nothing to show yet.</div>';return;}
+  let r=rows.slice();
+  if(SORT.key && cols.some(c=>c[0]===SORT.key)){
+    r.sort((a,b)=>{
+      let x=a[SORT.key], y=b[SORT.key];
+      if(x===null||x===undefined)x=-1e18; if(y===null||y===undefined)y=-1e18;
+      if(typeof x==='string'||typeof y==='string') return SORT.dir*String(x).localeCompare(String(y));
+      return SORT.dir*(x-y);
+    });
+  }
+  const head=cols.map(c=>{
+    const k=[(SORT.key===c[0]?'sorted':''),(c[3]==='sep'?'numsep':'')].filter(Boolean).join(' ');
+    return `<th data-k="${c[0]}" class="${k}">${c[1]}${SORT.key===c[0]?(SORT.dir<0?' ▾':' ▴'):''}</th>`;
+  }).join('');
+  const body=r.map(row=>{
+    const dim=dimIf?dimIf(row):false;
+    return `<tr class="${dim?'dim':''}">`+cols.map(c=>cell(row,c[0],c[2],c[3]==='sep')).join('')+'</tr>';
+  }).join('');
+  // The board is 1680px wide and re-renders every 15 seconds. Without this
+  // you get snapped back to column one mid-read, every time.
+  const sl=w.scrollLeft, st=w.scrollTop;
+  w.innerHTML=`<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+  w.scrollLeft=sl; w.scrollTop=st;
+  w.querySelectorAll('th').forEach(th=>th.addEventListener('click',()=>{
+    const k=th.dataset.k;
+    SORT = (SORT.key===k) ? {key:k,dir:-SORT.dir} : {key:k,dir:-1};
+    render(LAST);
+  }));
+}
+
+/* ---------------------------------------------------------------- render */
+function render(d){
+  if(!d) return;
+  LAST=d;
+  drawRegime(d.regime);
+  drawCurve(d.curve, d.regime?d.regime.spot_vix:null);
+  drawStructureFits(d.structure_fits);
+  drawSeasonality(d.seasonality);
+  const vc=d.verdict_counts||{};
+  $('#sigCount').innerHTML =
+      `<span style="color:var(--good)"><b>${vc['TRADE']||0}</b> trade</span>`
+    + `<span style="color:var(--c3)"><b>${vc['DUPLICATE']||0}</b> duplicate</span>`
+    + `<span style="color:var(--warn)"><b>${vc['HALF SIZE']||0}</b> half</span>`
+    + `<span style="color:var(--bad)"><b>${vc['VETO']||0}</b> veto</span>`
+    + `<span style="color:var(--info)"><b>${vc['WATCH']||0}</b> watch</span>`;
+  drawTable('#sigWrap', d.signal_board, SIG_COLS,
+            r=>['NO EDGE','FLAT','NOT TRADED'].includes(r.verdict));
+  drawTable('#carryWrap', d.carry_book, CARRY_COLS, ()=>false);
+
+  const stale = (d.stale&&d.stale.length) ? ` · ${d.stale.length} contract(s) without a price` : '';
+  // Where the prices came from decides whether "how old" is even a question.
+  // Read from Excel's memory they are current; read from the file they are
+  // only as new as the last save, and that has to be visible, not inferred.
+  const live = d.source_kind === 'excel';
+  const age = d.workbook_age_min, lim = d.workbook_stale_after_min || 15;
+  const old_wb = !live && age !== null && age !== undefined && age > lim;
+  let srcTxt, srcCol;
+  if(live){
+    srcTxt = `RTD live · every ${d.refresh_seconds||15}s`;
+    srcCol = 'var(--good)';
+  } else {
+    const wbs = d.workbook_stamp ? new Date(d.workbook_stamp).toLocaleTimeString() : '?';
+    srcTxt = `saved file ${wbs}` + (age!==null&&age!==undefined ? ` (${Math.round(age)} min old)` : '');
+    srcCol = old_wb ? 'var(--bad)' : 'var(--warn)';
+  }
+  const cls = (!live || (d.stale&&d.stale.length)) ? 'dot stale' : 'dot';
+  $('#statusLine').innerHTML = `<span class="${cls}"></span>`
+    + `<span class="mono">${d.price_field}</span> · `
+    + `<span style="color:${srcCol}" title="${(d.source_note||'').replace(/"/g,'')}">${srcTxt}</span>`
+    + ` · board ${d.as_of?new Date(d.as_of).toLocaleTimeString():'?'}${stale}`;
+  $('#footStats').textContent = ` Calibrated on ${d.n_history_sessions} sessions of Cboe settlements; history built ${d.history_built?new Date(d.history_built).toLocaleString():'?'}.`;
+}
+
+async function poll(){
+  try{
+    const r = await fetch('/api/board',{cache:'no-store'});
+    if(r.status===503){
+      const j=await r.json();
+      $('#err').innerHTML = `<div class="err">Not ready${j.error?': '+j.error:''} — building history, this takes a few seconds.</div>`;
+      return;
+    }
+    const d = await r.json();
+    $('#err').innerHTML='';
+    render(d);
+  }catch(e){
+    $('#err').innerHTML = `<div class="err">Cannot reach the server: ${e}</div>`;
+  }
+}
+
+async function post(url){ try{ await fetch(url,{method:'POST'}); }catch(e){} poll(); }
+$('#btnRefresh').addEventListener('click',()=>post('/api/refresh'));
+$('#btnRebuild').addEventListener('click',()=>{
+  $('#err').innerHTML='<div class="err">Rebuilding history…</div>'; post('/api/rebuild');
+});
+$('#btnLast').addEventListener('click',()=>{
+  $('#btnLast').classList.add('on'); $('#btnSettle').classList.remove('on');
+  post('/api/refresh?price_field=Last');
+});
+$('#btnSettle').addEventListener('click',()=>{
+  $('#btnSettle').classList.add('on'); $('#btnLast').classList.remove('on');
+  post('/api/refresh?price_field=Settle');
+});
+
+// The server pulls Excel every 15s. Polling at 5s means a new tick is on the
+// plots within ~5s of being pulled, instead of being missed for a whole cycle
+// when the two timers drift apart. The payload is small and local.
+poll();
+setInterval(poll, 5000);
+</script>
+</body>
+</html>
